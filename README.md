@@ -21,7 +21,7 @@ You can also type `/handoff` at any time.
 You need Claude Code 2.1.286 or later. Run these two commands in a terminal:
 
 ```bash
-claude plugin marketplace add DevenBhalerao/claude-code-plugins
+claude plugin marketplace add https://github.com/DevenBhalerao/claude-code-plugins.git
 ```
 
 ```bash
