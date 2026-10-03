@@ -1,6 +1,6 @@
 {
   "name": "handoff",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Swap a long conversation for a short handoff note you control, from a button that appears when context gets big",
   "author": {
     "name": "Deven Bhalerao"

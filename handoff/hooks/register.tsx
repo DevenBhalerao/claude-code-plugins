@@ -59,6 +59,12 @@ async function runHandoff($: Engine): Promise<string> {
     // nothing appears in the transcript.
     const reply = await $.model.fork({ prompt: HANDOFF_PROMPT })
     if (!reply.isAnswered) {
+      if (reply.reason === 'nothing-to-fork') {
+        // A new chat, or one just cleared: Claude has not replied yet, so there is
+        // no conversation to write a note about.
+        return 'Nothing to hand off yet: Claude has not replied in this chat. Send a message first.'
+      }
+
       return `Handoff stopped: the note could not be written (${reply.reason}). Nothing was changed.`
     }
 
