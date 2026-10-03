@@ -1,0 +1,24 @@
+{
+  "name": "handoff",
+  "version": "0.3.0",
+  "description": "Swap a long conversation for a short handoff note you control, from a button that appears when context gets big",
+  "author": {
+    "name": "Deven Bhalerao"
+  },
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "threshold": {
+      "type": "number",
+      "title": "Handoff threshold (tokens)",
+      "description": "Show the Hand off button once the context reaches this many tokens",
+      "default": 150000
+    },
+    "mode": {
+      "type": "string",
+      "title": "Mode",
+      "description": "button: show a button and wait for you. auto: hand off by itself after Claude finishes a reply past the threshold",
+      "default": "button",
+      "options": ["button", "auto"]
+    }
+  }
+}
