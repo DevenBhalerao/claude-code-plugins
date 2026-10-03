@@ -5,6 +5,8 @@
   "author": {
     "name": "Deven Bhalerao"
   },
+  "repository": "https://github.com/DevenBhalerao/claude-code-plugins",
+  "license": "MIT",
   "types": "./types/index.d.ts",
   "userConfig": {
     "threshold": {

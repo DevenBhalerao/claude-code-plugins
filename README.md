@@ -55,3 +55,7 @@ Then restart Claude Code.
 ## Privacy
 
 Notes can quote your chat. Handoff adds a `.gitignore` to the notes folder so git skips them. Check a note before you share it.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
