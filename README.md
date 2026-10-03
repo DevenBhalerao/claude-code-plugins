@@ -37,6 +37,8 @@ Then restart Claude Code.
 
 If `latest.md` does not exist, nothing happens to the chat.
 
+**Check the note first.** `/compact handoff` loads whatever `latest.md` holds. It does not write a new note. Each project has one `latest.md`, so it may come from an older handoff or a different chat. Open it and check it matches this chat before you run the command. If it is out of date, click **Hand off now** or type `/handoff` instead. Those write a fresh note.
+
 ## Settings
 
 | Setting | Default | What it does |
