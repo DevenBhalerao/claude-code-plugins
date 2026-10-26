@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { Engine, Register } from 'claude-code'
+import type { EngineInterface as Engine, ModelCompleteResult, Register, SessionMessage } from 'claude-code'
 
 import type { Phase } from '../types'
 
@@ -24,6 +24,13 @@ Reply with only the note, in Markdown, under 800 words, using these sections:
 
 Leave out secrets such as API keys, tokens or passwords.`
 
+// Limits for the backup note, written from the saved transcript. Tool output is most
+// of a long chat's size and rarely matters for the note, so it is cut hard.
+const TOOL_INPUT_CHARS = 300
+const TOOL_OUTPUT_CHARS = 600
+const MESSAGE_CHARS = 8000
+const TRANSCRIPT_CHARS = 400000
+
 const tokens = atom({ plugin: 'handoff', key: 'tokens' } as const, null)
 const phase = atom({ plugin: 'handoff', key: 'phase' } as const, 'idle' as Phase)
 const snoozeUntil = atom({ plugin: 'handoff', key: 'snoozeUntil' } as const, 0)
@@ -45,6 +52,56 @@ async function forgetTokens($: Engine) {
   await update($, snoozeUntil, () => 0)
 }
 
+const clip = (text: string, limit: number) =>
+  text.length <= limit ? text : `${text.slice(0, limit)} [...cut ${text.length - limit} chars]`
+
+// The conversation as plain text. Over the size limit it keeps the first message (it
+// usually states the goal) and as many of the latest as fit.
+function transcriptText(messages: readonly SessionMessage[]) {
+  const blocks = messages.map(message => {
+    const lines: string[] = []
+    if (message.text) {
+      lines.push(`${message.role.toUpperCase()}: ${clip(message.text, MESSAGE_CHARS)}`)
+    }
+    for (const use of message.toolUses) {
+      lines.push(`[tool ${use.tool}] ${clip(JSON.stringify(use.input), TOOL_INPUT_CHARS)}`)
+      if (use.text !== undefined) {
+        lines.push(`[${use.isError ? 'error' : 'result'}] ${clip(use.text, TOOL_OUTPUT_CHARS)}`)
+      }
+    }
+
+    return lines.join('\n')
+  }).filter(block => block !== '')
+
+  const [first = '', ...rest] = blocks
+  const kept: string[] = []
+  let size = first.length
+  for (const block of rest.reverse()) {
+    if (size + block.length > TRANSCRIPT_CHARS) {
+      kept.unshift('[...earlier messages left out...]')
+      break
+    }
+    kept.unshift(block)
+    size += block.length
+  }
+
+  return [first, ...kept].join('\n\n')
+}
+
+// Backup for when there is nothing to fork (a reopened chat before its first reply):
+// one completion over the saved transcript. It costs more than a fork, since nothing is
+// cached, and tool output is cut short, so the note can miss small details.
+async function noteFromTranscript($: Engine): Promise<ModelCompleteResult> {
+  const transcript = transcriptText(await $.session.messages())
+
+  return $.model.complete({
+    model: await $.session.model(),
+    prompt: `Below is the transcript of a Claude Code conversation. Long tool output has been cut short.\n\n<transcript>\n${transcript}\n</transcript>\n\n${HANDOFF_PROMPT}`,
+    maxTokens: 4000,
+    timeoutMs: 5 * 60 * 1000,
+  })
+}
+
 // The whole handoff: ask Claude for the note, save it, then swap the conversation for it.
 async function runHandoff($: Engine): Promise<string> {
   if ((await read($, phase)) !== 'idle') {
@@ -57,15 +114,18 @@ async function runHandoff($: Engine): Promise<string> {
 
     // A fork reuses this conversation's cache, so writing the note is cheap and
     // nothing appears in the transcript.
-    const reply = await $.model.fork({ prompt: HANDOFF_PROMPT })
-    if (!reply.isAnswered) {
-      if (reply.reason === 'nothing-to-fork') {
-        // The fork re-sends the main thread's last request, which lives only in the
-        // running app: none exists in a new chat, after /clear, or in an old chat
-        // reopened after a restart, until Claude replies once.
-        return 'Nothing to hand off yet: Claude has not replied since this chat was opened. Send any message, wait for the reply, then try again.'
+    let reply = await $.model.fork({ prompt: HANDOFF_PROMPT })
+    if (!reply.isAnswered && reply.reason === 'nothing-to-fork') {
+      // The fork re-sends the main thread's last request, which lives only in the
+      // running app: none exists in a new chat, after /clear, or in an old chat
+      // reopened after a restart, until Claude replies once.
+      if ((await $.session.messages()).length === 0) {
+        return 'Nothing to hand off yet: this chat is empty.'
       }
-
+      $.ui.toast('Writing the note from the saved chat. This takes a little longer.')
+      reply = await noteFromTranscript($)
+    }
+    if (!reply.isAnswered) {
       return `Handoff stopped: the note could not be written (${reply.reason}). Nothing was changed.`
     }
 
